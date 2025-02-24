@@ -15,5 +15,8 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.SqlServer.DacFx" Version="162.5.57" />
     </ItemGroup>
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
 </Project>
