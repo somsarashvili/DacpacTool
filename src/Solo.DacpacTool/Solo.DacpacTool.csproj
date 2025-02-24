@@ -8,6 +8,7 @@
         <ToolCommandName>dpt</ToolCommandName>
         <PackAsTool>true</PackAsTool>
         <PackageOutputPath>./nupkg</PackageOutputPath>
+        <Version>1.1.0</Version>
     </PropertyGroup>
 
     <ItemGroup>

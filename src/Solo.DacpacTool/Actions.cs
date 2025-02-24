@@ -96,10 +96,13 @@ public static class Actions
         var indexRegex = new Regex(
             @"CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+)?INDEX\s+(?:\[?(?<indexName>[^\]\s]+)\]?)\s+ON\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<table>[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // ALTER TABLE regex for constraints
+        var alterTableRegex = new Regex(@"ALTER\s+TABLE\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
+            RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
-        // Dictionaries to keep track of table files and pending triggers/indexes
+        // Dictionaries to keep track of table files and pending extras (triggers, indexes, alters)
         var tableFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var pendingTriggersIndexes = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var pendingExtras = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         var counter = 0;
 
@@ -126,15 +129,15 @@ public static class Actions
                 File.WriteAllText(filePath, trimmedBatch + Environment.NewLine);
                 tableFiles[key] = filePath;
 
-                // If any triggers or indexes were pending for this table, append them
-                if (pendingTriggersIndexes.ContainsKey(key))
+                // Append any pending extras (triggers, indexes, ALTER TABLE constraints) for this table
+                if (pendingExtras.ContainsKey(key))
                 {
-                    foreach (var extra in pendingTriggersIndexes[key])
+                    foreach (var extra in pendingExtras[key])
                     {
                         File.AppendAllText(filePath, Environment.NewLine + Environment.NewLine + extra);
                     }
 
-                    pendingTriggersIndexes.Remove(key);
+                    pendingExtras.Remove(key);
                 }
 
                 continue;
@@ -185,7 +188,7 @@ public static class Actions
                 continue;
             }
 
-            // Process CREATE TRIGGER and save with corresponding table SQL
+            // Process CREATE TRIGGER and append to corresponding table SQL
             var triggerMatch = triggerRegex.Match(trimmedBatch);
             if (triggerMatch.Success)
             {
@@ -194,55 +197,73 @@ public static class Actions
                     : "dbo";
                 var targetTable = triggerMatch.Groups["table"].Value;
                 var key = targetSchema + "." + targetTable;
-                var triggerSql = trimmedBatch;
+                var extraSql = "-- Trigger: " + triggerMatch.Groups["object"].Value + Environment.NewLine +
+                               trimmedBatch;
 
                 if (tableFiles.ContainsKey(key))
                 {
-                    // Append trigger SQL to the corresponding table file
-                    File.AppendAllText(tableFiles[key],
-                        Environment.NewLine + "GO" + Environment.NewLine + "-- Trigger: " +
-                        triggerMatch.Groups["object"].Value + Environment.NewLine + triggerSql);
+                    File.AppendAllText(tableFiles[key], Environment.NewLine + "GO" + Environment.NewLine + extraSql);
                 }
                 else
                 {
-                    // If table file not found yet, store in pending list
-                    if (!pendingTriggersIndexes.ContainsKey(key))
+                    if (!pendingExtras.ContainsKey(key))
                     {
-                        pendingTriggersIndexes[key] = new List<string>();
+                        pendingExtras[key] = new List<string>();
                     }
 
-                    pendingTriggersIndexes[key].Add("-- Trigger: " + triggerMatch.Groups["object"].Value +
-                                                    Environment.NewLine + triggerSql);
+                    pendingExtras[key].Add(extraSql);
                 }
 
                 continue;
             }
 
-            // Process CREATE INDEX and save with corresponding table SQL
+            // Process CREATE INDEX and append to corresponding table SQL
             var indexMatch = indexRegex.Match(trimmedBatch);
             if (indexMatch.Success)
             {
                 var schema = indexMatch.Groups["schema"].Success ? indexMatch.Groups["schema"].Value : "dbo";
                 var targetTable = indexMatch.Groups["table"].Value;
                 var key = schema + "." + targetTable;
-                var indexSql = trimmedBatch;
+                var extraSql = "-- Index: " + indexMatch.Groups["indexName"].Value + Environment.NewLine + trimmedBatch;
 
                 if (tableFiles.ContainsKey(key))
                 {
-                    // Append index SQL to the corresponding table file
-                    File.AppendAllText(tableFiles[key],
-                        Environment.NewLine + "GO" + Environment.NewLine + "-- Index: " +
-                        indexMatch.Groups["indexName"].Value + Environment.NewLine + indexSql);
+                    File.AppendAllText(tableFiles[key], Environment.NewLine + "GO" + Environment.NewLine + extraSql);
                 }
                 else
                 {
-                    if (!pendingTriggersIndexes.ContainsKey(key))
+                    if (!pendingExtras.ContainsKey(key))
                     {
-                        pendingTriggersIndexes[key] = new List<string>();
+                        pendingExtras[key] = new List<string>();
                     }
 
-                    pendingTriggersIndexes[key].Add("-- Index: " + indexMatch.Groups["indexName"].Value +
-                                                    Environment.NewLine + indexSql);
+                    pendingExtras[key].Add(extraSql);
+                }
+
+                continue;
+            }
+
+            // Process ALTER TABLE for adding constraints and append to corresponding table SQL
+            var alterMatch = alterTableRegex.Match(trimmedBatch);
+            if (alterMatch.Success && trimmedBatch.IndexOf("ADD CONSTRAINT", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var schema = alterMatch.Groups["schema"].Success ? alterMatch.Groups["schema"].Value : "dbo";
+                var tableName = alterMatch.Groups["object"].Value;
+                var key = schema + "." + tableName;
+                var extraSql = "-- Alter Table Constraint" + Environment.NewLine + trimmedBatch;
+
+                if (tableFiles.ContainsKey(key))
+                {
+                    File.AppendAllText(tableFiles[key], Environment.NewLine + "GO" + Environment.NewLine + extraSql);
+                }
+                else
+                {
+                    if (!pendingExtras.ContainsKey(key))
+                    {
+                        pendingExtras[key] = new List<string>();
+                    }
+
+                    pendingExtras[key].Add(extraSql);
                 }
 
                 continue;
@@ -255,12 +276,12 @@ public static class Actions
             File.WriteAllText(miscPath, trimmedBatch);
         }
 
-        // For any pending triggers/indexes where no table file was found, write them to Misc
-        if (pendingTriggersIndexes.Any())
+        // Write any pending extras that could not be associated with a table into Misc folder
+        if (pendingExtras.Any())
         {
             var miscFolder = Path.Combine(outputBasePath, "Misc");
             Directory.CreateDirectory(miscFolder);
-            foreach (var kvp in pendingTriggersIndexes)
+            foreach (var kvp in pendingExtras)
             {
                 var fileName = $"MissingTable_{kvp.Key.Replace('.', '_')}.sql";
                 var filePath = Path.Combine(miscFolder, fileName);

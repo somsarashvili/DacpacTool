@@ -10,7 +10,7 @@ public static class Jobs
     public static void ExportDatabase()
     {
         var sourceConnectionString = GetEnvVar("SOURCE_CONNECTION_STRING");
-        var sqlprojDir = GetEnvVar("SQLPROJ_DIR_PATH");
+        var sqlprojDir = GetEnvVar("SQLPROJ_DIR_PATH").ToRooted();
         _ = GetSqlprojPath(sqlprojDir);
 
         var dacpacPath = Path.Combine(TempPath, "dump.dacpac");
@@ -35,7 +35,7 @@ public static class Jobs
 
     private static string GenerateMigrationScript()
     {
-        var sqlprojDir = GetEnvVar("SQLPROJ_DIR_PATH");
+        var sqlprojDir = GetEnvVar("SQLPROJ_DIR_PATH").ToRooted();
         var sqlprojPath = GetSqlprojPath(sqlprojDir);
         var destinationConnectionString = GetEnvVar("DESTINATION_CONNECTION_STRING");
 
@@ -68,10 +68,10 @@ public static class Jobs
 
         var migrationName = args[1];
 
-        var targetProjectPath = GetEnvVar("EF_TARGET_PROJECT_PATH");
-        var startupProjectPath = GetEnvVar("EF_STARTUP_PROJECT_PATH");
+        var targetProjectPath = GetEnvVar("EF_TARGET_PROJECT_PATH").ToRooted();
+        var startupProjectPath = GetEnvVar("EF_STARTUP_PROJECT_PATH").ToRooted();
         var contextName = GetEnvVar("EF_CONTEXT_NAME");
-        var migrationsDirPath = GetEnvVar("EF_MIGRATIONS_DIR_PATH");
+        var migrationsDirPath = GetEnvVar("EF_MIGRATIONS_DIR_PATH").ToRooted();
 
         var script = GenerateMigrationScript();
         Run("dotnet", [

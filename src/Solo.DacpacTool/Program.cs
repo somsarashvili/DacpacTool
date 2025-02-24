@@ -19,6 +19,11 @@ if (args.Length == 0)
     Console.WriteLine("  SOURCE_CONNECTION_STRING - Connection string to the source database");
     Console.WriteLine("  DESTINATION_CONNECTION_STRING - Connection string to the destination database");
     Console.WriteLine("  SQLPROJ_DIR_PATH - Path to the .sqlproj project directory");
+    Console.WriteLine("  EF_STARTUP_PROJECT_PATH - Path to the startup project");
+    Console.WriteLine("  EF_TARGET_PROJECT_PATH - Path to the target project");
+    Console.WriteLine("  EF_CONTEXT_NAME - Name of the DbContext class");
+    Console.WriteLine("  EF_MIGRATIONS_DIR_PATH - Path to the migrations directory");
+    
     Console.WriteLine("\nCan load .env file from working directory to set environment variables");
     return;
 }
