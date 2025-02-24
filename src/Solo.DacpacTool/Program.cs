@@ -1,6 +1,5 @@
 ﻿using Solo.DacpacTool;
 using System.Reflection;
-using static Solo.DacpacTool.Actions;
 
 if (args.Length == 0)
 {
@@ -10,33 +9,44 @@ if (args.Length == 0)
 
     Console.WriteLine($"Dacpac Tool v{versionString}");
     Console.WriteLine("-------------");
-    Console.WriteLine("\nUsage:");
-    Console.WriteLine("  dpt <message>");
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  dpt <job>");
+    Console.WriteLine("\nJobs:");
+    Console.WriteLine("  export-database - Exports the database schema to a .sqlproj project");
+    Console.WriteLine("  generate-migration - Builds .sqlproj project and generates migration scripts");
+    Console.WriteLine("  generate-ef-migration <name> - Builds .sqlproj project and generates ef migration");
+    Console.WriteLine("\nEnvironment Variables:");
+    Console.WriteLine("  SOURCE_CONNECTION_STRING - Connection string to the source database");
+    Console.WriteLine("  DESTINATION_CONNECTION_STRING - Connection string to the destination database");
+    Console.WriteLine("  SQLPROJ_DIR_PATH - Path to the .sqlproj project directory");
+    Console.WriteLine("\nCan load .env file from working directory to set environment variables");
     return;
 }
 
-EnvReader.Load(".env");
-var opId = Guid.NewGuid().ToString();
+var job = args[0];
 
-var tempPath = Directory.CreateTempSubdirectory($"dacpac_temp_{opId}").FullName;
+EnvReader.Load(".env");
+Console.WriteLine($"Temp path: {Jobs.TempPath}");
 
 try
 {
-    var sourceConnectionString = GetEnvVar("SOURCE_CONNECTION_STRING");
-    var destinationConnectionString = GetEnvVar("DESTINATION_CONNECTION_STRING");
-    var outputBasePath = GetEnvVar("SQLPROJ_DIR_PATH");
-
-    var dacpacPath = Path.Combine(tempPath, "dump.dacpac");
-    var outputDirectory = Path.Combine(tempPath, "output");
-
-    Directory.CreateDirectory(outputBasePath);
-
-    GenerateDacpac(sourceConnectionString, dacpacPath);
-    UnpackDacpac(dacpacPath, outputDirectory);
-    OutputSql(outputDirectory, outputBasePath);
-    GenerateMigration(destinationConnectionString, dacpacPath, $"{outputBasePath}/Migrations");
+    switch (job)
+    {
+        case "export-database":
+            Jobs.ExportDatabase();
+            break;
+        case "generate-migration":
+            Jobs.GenerateMigration();
+            break;
+        case "generate-ef-migration":
+            Jobs.GenerateEfMigration();
+            break;
+        default:
+            Console.WriteLine($"Unknown job: {job}");
+            break;
+    }
 }
 finally
 {
-    Directory.Delete(tempPath, true);
+    Directory.Delete(Jobs.TempPath, true);
 }

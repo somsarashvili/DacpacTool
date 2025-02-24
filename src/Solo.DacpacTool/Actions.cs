@@ -1,6 +1,8 @@
 using Microsoft.SqlServer.Dac;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace Solo.DacpacTool;
 
@@ -26,6 +28,34 @@ public static class Actions
         }
 
         return null;
+    }
+
+    public static string GetSqlprojPath(string sqlprojDir)
+    {
+        // Retrieve all files with the .sqlproj extension in the directory and subdirectories.
+        var sqlprojFiles = Directory.GetFiles(sqlprojDir, "*.csproj", SearchOption.AllDirectories);
+
+        if (sqlprojFiles.Length == 0)
+        {
+            throw new Exception("No .csproj files found in the specified directory.");
+        }
+
+        if (sqlprojFiles.Length > 1)
+        {
+            throw new Exception(
+                $"Multiple .csproj files found ({string.Join(',', sqlprojFiles)}) in the specified directory.");
+        }
+
+        var projPath = sqlprojFiles[0];
+        var xdoc = XDocument.Load(projPath);
+        var sdkAttribute = xdoc.Root?.Attribute("Sdk")?.Value;
+
+        if (sdkAttribute?.StartsWith("MSBuild.Sdk.SqlProj") != true)
+        {
+            throw new Exception("No .csproj files found with MSBuild.Sdk.SqlProj SDK in the specified directory.");
+        }
+
+        return projPath;
     }
 
     public static void GenerateDacpac(string connectionString, string dacpacPath)
@@ -170,7 +200,7 @@ public static class Actions
                 {
                     // Append trigger SQL to the corresponding table file
                     File.AppendAllText(tableFiles[key],
-                        Environment.NewLine + Environment.NewLine + "-- Trigger: " +
+                        Environment.NewLine + "GO" + Environment.NewLine + "-- Trigger: " +
                         triggerMatch.Groups["object"].Value + Environment.NewLine + triggerSql);
                 }
                 else
@@ -201,7 +231,7 @@ public static class Actions
                 {
                     // Append index SQL to the corresponding table file
                     File.AppendAllText(tableFiles[key],
-                        Environment.NewLine + Environment.NewLine + "-- Index: " +
+                        Environment.NewLine + "GO" + Environment.NewLine + "-- Index: " +
                         indexMatch.Groups["indexName"].Value + Environment.NewLine + indexSql);
                 }
                 else
@@ -240,31 +270,74 @@ public static class Actions
         }
     }
 
-    public static void GenerateMigration(string connectionString, string dacpacPath, string deploymentScriptPath)
+    public static string GenerateMigration(string connectionString, string dacpacPath)
     {
         var databaseName = ExtractDatabaseName(connectionString);
         var dacServices = new DacServices(connectionString);
         using var dacpac = DacPackage.Load(dacpacPath);
         // Optionally, define deployment options (customize as needed)
         var deployOptions = new PublishOptions();
-        // For example, you might set:
-        // deployOptions.BlockOnPossibleDataLoss = false;
 
         // Generate a full deployment script that can be used to create the database.
         var script = dacServices.Script(dacpac, databaseName, deployOptions);
-
-        // // Save the deployment script to a file.
-        // var cleanedScript = Regex.Replace(
-        //     script.DatabaseScript,
-        //     @"^USE\s+\[\$\(.+\)\];\s*(\r?\n)?",
-        //     string.Empty,
-        //     RegexOptions.Multiline);
 
         var cleanedScript = Regex.Replace(script.DatabaseScript,
             @"^(?:USE\s+\[\$\(.+\)\];\s*(?:\r?\n)?|:setvar\s+(?:DatabaseName|DefaultFilePrefix|DefaultDataPath|DefaultLogPath).*)",
             string.Empty, RegexOptions.Multiline);
 
-        File.WriteAllText(deploymentScriptPath, cleanedScript);
-        Console.WriteLine($"Deployment script generated successfully at: {deploymentScriptPath}");
+        return cleanedScript;
+    }
+
+    public static void Run(string program, string[] args, string? workingDir = null)
+    {
+        // run process
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = program,
+                Arguments = string.Join(' ', args),
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                UseShellExecute = true,
+                CreateNoWindow = true,
+                WorkingDirectory = workingDir ?? Directory.GetCurrentDirectory(),
+            }
+        };
+
+        process.Start();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"Process exited with code {process.ExitCode}");
+        }
+    }
+
+    public static void BuildSqlproj(string sqlprojDir)
+    {
+        var sqlprojPath = GetSqlprojPath(sqlprojDir);
+
+        Run("dotnet", ["build", "/consoleLoggerParameters:ForceAnsi", sqlprojPath], sqlprojDir);
+    }
+
+    public static string FindDacpac(string sqlprojDir)
+    {
+        _ = GetSqlprojPath(sqlprojDir);
+
+        var dacpacFiles = Directory.GetFiles(Path.Join(sqlprojDir, "bin"), "*.dacpac", SearchOption.AllDirectories);
+
+        if (dacpacFiles.Length == 0)
+        {
+            throw new Exception("No .dacpac files found in the specified directory.");
+        }
+
+        if (dacpacFiles.Length > 1)
+        {
+            throw new Exception(
+                $"Multiple .dacpac files found ({string.Join(',', dacpacFiles)}) in the specified directory.");
+        }
+
+        return dacpacFiles[0];
     }
 }
