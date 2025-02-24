@@ -1,0 +1,34 @@
+name: Publish to NuGet
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout your repository
+      - uses: actions/checkout@v3
+
+      # Set up .NET 9 (adjust version as needed)
+      - uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+
+      # Restore dependencies
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Build the project
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      # Pack the project into a NuGet package
+      - name: Pack
+        run: dotnet pack --configuration Release --no-build -o ./nupkgs
+
+      # Publish the package to NuGet
+      - name: Publish to NuGet
+        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

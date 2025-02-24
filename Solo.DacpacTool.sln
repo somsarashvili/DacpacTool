@@ -8,6 +8,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{CF8219CE-5838-4E30-A79F-2FFC83114B06}"
 	ProjectSection(SolutionItems) = preProject
 		.gitignore = .gitignore
+		nuget-publish.yml = .github\workflows\nuget-publish.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{73350AC2-0713-4FC6-833C-73A7883780FF}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{B47E17C1-1ED2-4F5E-B1BC-0E1A4D0BBC00}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\nuget-publish.yml = .github\workflows\nuget-publish.yml
 	EndProjectSection
 EndProject
 Global
@@ -23,5 +31,9 @@ Global
 		{7AF9377B-8F5D-4713-BE9D-FCE1BBC4B553}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7AF9377B-8F5D-4713-BE9D-FCE1BBC4B553}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7AF9377B-8F5D-4713-BE9D-FCE1BBC4B553}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{73350AC2-0713-4FC6-833C-73A7883780FF} = {CF8219CE-5838-4E30-A79F-2FFC83114B06}
+		{B47E17C1-1ED2-4F5E-B1BC-0E1A4D0BBC00} = {73350AC2-0713-4FC6-833C-73A7883780FF}
 	EndGlobalSection
 EndGlobal
