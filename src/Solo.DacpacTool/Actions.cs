@@ -297,14 +297,43 @@ public static class Actions
         var dacServices = new DacServices(connectionString);
         using var dacpac = DacPackage.Load(dacpacPath);
         // Optionally, define deployment options (customize as needed)
-        var deployOptions = new PublishOptions();
+        var deployOptions = new PublishOptions
+        {
+            DeployOptions = new DacDeployOptions
+            {
+                ScriptDatabaseOptions = false,
+                IgnorePermissions = true,
+                IgnoreLoginSids = true,
+                IgnoreRoleMembership = true,
+                IgnoreUserSettingsObjects = true,
+                IgnoreAnsiNulls = true,
+                IgnoreAuthorizer = true,
+                DoNotEvaluateSqlCmdVariables = true,
+                IgnoreWithNocheckOnCheckConstraints = true,
+                DropConstraintsNotInSource = true,
+                ScriptNewConstraintValidation = false
+            },
+        };
 
         // Generate a full deployment script that can be used to create the database.
         var script = dacServices.Script(dacpac, databaseName, deployOptions);
 
-        var cleanedScript = Regex.Replace(script.DatabaseScript,
-            @"^(?:USE\s+\[\$\(.+\)\];\s*(?:\r?\n)?|:setvar\s+(?:DatabaseName|DefaultFilePrefix|DefaultDataPath|DefaultLogPath).*)",
-            string.Empty, RegexOptions.Multiline);
+        // (\r?\n)* matches zero or more newlines
+        const string canStartWithGoRegx = @"(GO(\r?\n)+)?";
+        const string removeCommentsRegx = @$"({canStartWithGoRegx}\/\*([\s\S]*?)\*\/(\r?\n)*)"; // remove comments and empty lines
+        const string removeSetRegx = @$"({canStartWithGoRegx}SET([\s\S]*?);(\r?\n)*)"; // remove SET*; statements and empty lines
+        const string removeGoCmdVarRegx = @"(GO(\r?\n)+(\:.*(\r?\n)+)+(\r?\n)*)"; // remove :cmd variables
+        const string removeCmdCheckRegex = @"(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
+        const string removeUseOrPrintRegx = @"(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
+        const string removeExtraLinesRegex = @"(\n(?:\n))";
+
+        var regex = $"^{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}|{removeExtraLinesRegex}";
+
+        var cleanedScript = Regex.Replace(
+            script.DatabaseScript,
+            regex,
+            string.Empty,
+            RegexOptions.IgnorePatternWhitespace | RegexOptions.Multiline);
 
         return cleanedScript;
     }
