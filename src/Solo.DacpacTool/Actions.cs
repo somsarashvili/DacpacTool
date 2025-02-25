@@ -319,15 +319,15 @@ public static class Actions
         var script = dacServices.Script(dacpac, databaseName, deployOptions);
 
         // (\r?\n)* matches zero or more newlines
-        const string canStartWithGoRegx = @"(GO(\r?\n)+)?";
-        const string removeCommentsRegx = @$"({canStartWithGoRegx}\/\*([\s\S]*?)\*\/(\r?\n)*)"; // remove comments and empty lines
-        const string removeSetRegx = @$"({canStartWithGoRegx}SET([\s\S]*?);(\r?\n)*)"; // remove SET*; statements and empty lines
-        const string removeGoCmdVarRegx = @"(GO(\r?\n)+(\:.*(\r?\n)+)+(\r?\n)*)"; // remove :cmd variables
-        const string removeCmdCheckRegex = @"(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
-        const string removeUseOrPrintRegx = @"(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
-        const string removeExtraLinesRegex = @"(\n(?:\n))";
+        const string canStartWithGoRegx = @"^(GO(\r?\n)+)?";
+        const string removeCommentsRegx = @$"^({canStartWithGoRegx}\/\*([\s\S]*?)\*\/(\r?\n)*)"; // remove comments and empty lines
+        const string removeSetRegx = @$"^({canStartWithGoRegx}SET([\s\S]*?);(\r?\n)*)"; // remove SET*; statements and empty lines
+        const string removeGoCmdVarRegx = @"^(GO(\r?\n)+(\:.*(\r?\n)+)+(\r?\n)*)"; // remove :cmd variables
+        const string removeCmdCheckRegex = @"^(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
+        const string removeUseOrPrintRegx = @"^(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
+        const string removeExtraLinesRegex = @"^(\n(?:\n))";
 
-        var regex = $"^{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}|{removeExtraLinesRegex}";
+        var regex = $"{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}|{removeExtraLinesRegex}";
 
         var cleanedScript = Regex.Replace(
             script.DatabaseScript,
