@@ -8,7 +8,7 @@
         <ToolCommandName>dpt</ToolCommandName>
         <PackAsTool>true</PackAsTool>
         <PackageOutputPath>./nupkg</PackageOutputPath>
-        <Version>1.2.2</Version>
+        <Version>1.2.3</Version>
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 

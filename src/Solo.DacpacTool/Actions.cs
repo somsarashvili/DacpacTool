@@ -325,9 +325,8 @@ public static class Actions
         const string removeGoCmdVarRegx = @"^(GO(\r?\n)+(\:.*(\r?\n)+)+(\r?\n)*)"; // remove :cmd variables
         const string removeCmdCheckRegex = @"^(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
         const string removeUseOrPrintRegx = @"^(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
-        const string removeExtraLinesRegex = @"^(\n(?:\n))";
 
-        var regex = $"{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}|{removeExtraLinesRegex}";
+        var regex = $"{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}";
 
         var cleanedScript = Regex.Replace(
             script.DatabaseScript,
