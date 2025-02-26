@@ -23,7 +23,7 @@ if (args.Length == 0)
     Console.WriteLine("  EF_TARGET_PROJECT_PATH - Path to the target project");
     Console.WriteLine("  EF_CONTEXT_NAME - Name of the DbContext class");
     Console.WriteLine("  EF_MIGRATIONS_DIR_PATH - Path to the migrations directory");
-    
+
     Console.WriteLine("\nCan load .env file from working directory to set environment variables");
     return;
 }
@@ -33,25 +33,20 @@ var job = args[0];
 EnvReader.Load(".env");
 Console.WriteLine($"Temp path: {Jobs.TempPath}");
 
-try
+switch (job)
 {
-    switch (job)
-    {
-        case "export-database":
-            Jobs.ExportDatabase();
-            break;
-        case "generate-migration":
-            Jobs.GenerateMigration();
-            break;
-        case "generate-ef-migration":
-            Jobs.GenerateEfMigration();
-            break;
-        default:
-            Console.WriteLine($"Unknown job: {job}");
-            break;
-    }
+    case "export-database":
+        Jobs.ExportDatabase();
+        break;
+    case "generate-migration":
+        Jobs.GenerateMigration();
+        break;
+    case "generate-ef-migration":
+        Jobs.GenerateEfMigration();
+        break;
+    default:
+        Console.WriteLine($"Unknown job: {job}");
+        break;
 }
-finally
-{
-    Directory.Delete(Jobs.TempPath, true);
-}
+
+Directory.Delete(Jobs.TempPath, true);

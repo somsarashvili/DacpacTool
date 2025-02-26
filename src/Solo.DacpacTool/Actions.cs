@@ -1,6 +1,7 @@
 using Microsoft.SqlServer.Dac;
 using System.Data.Common;
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -75,7 +76,7 @@ public static class Actions
     {
         var allSql = File.ReadAllText($"{outputDirectory}/model.sql");
 
-        var batches = Regex.Split(allSql, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)
+        var batches = allSql.Split("GO")
             .Where(b => !string.IsNullOrWhiteSpace(b))
             .ToList();
 
@@ -88,9 +89,13 @@ public static class Actions
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         var functionRegex = new Regex(@"CREATE\s+FUNCTION\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
-        // Trigger regex extracts target table from "ON" clause
+        // Trigger regex for table-level triggers (exclude database triggers)
         var triggerRegex = new Regex(
-            @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?\s+ON\s+(?:\[?(?<targetSchema>[^\]\.]+)\]?\.?)?\[?(?<table>[^\]\s]+)\]?",
+            @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?\s+ON\s+(?!DATABASE)(?:\[?(?<targetSchema>[^\]\.]+)\]?\.?)?\[?(?<table>[^\]\s]+)\]?",
+            RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // Regex for database-level triggers (ON DATABASE)
+        var dbTriggerRegex = new Regex(
+            @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?\s+ON\s+DATABASE",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         // Index regex extracts target table from "ON" clause
         var indexRegex = new Regex(
@@ -134,7 +139,7 @@ public static class Actions
                 {
                     foreach (var extra in pendingExtras[key])
                     {
-                        File.AppendAllText(filePath, Environment.NewLine + Environment.NewLine + extra);
+                        File.AppendAllText(filePath, Environment.NewLine + "GO" + Environment.NewLine + extra);
                     }
 
                     pendingExtras.Remove(key);
@@ -188,16 +193,39 @@ public static class Actions
                 continue;
             }
 
-            // Process CREATE TRIGGER and append to corresponding table SQL
-            var triggerMatch = triggerRegex.Match(trimmedBatch);
-            if (triggerMatch.Success)
+            // Process database-level triggers (ON DATABASE)
+            if (trimmedBatch.IndexOf("ON DATABASE", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                var targetSchema = triggerMatch.Groups["targetSchema"].Success
-                    ? triggerMatch.Groups["targetSchema"].Value
+                var dbTriggerMatch = dbTriggerRegex.Match(trimmedBatch);
+                if (dbTriggerMatch.Success)
+                {
+                    var triggerName = dbTriggerMatch.Groups["schema"].Value;
+                    var dbTriggersFolder = Path.Combine(outputBasePath, "Database Triggers");
+                    Directory.CreateDirectory(dbTriggersFolder);
+                    var dbTriggerFilePath = Path.Combine(dbTriggersFolder, triggerName + ".sql");
+                    File.WriteAllText(dbTriggerFilePath, trimmedBatch);
+                }
+                else
+                {
+                    var miscFolder = Path.Combine(outputBasePath, "Misc");
+                    Directory.CreateDirectory(miscFolder);
+                    var miscPath = Path.Combine(miscFolder, $"Batch_{counter}.sql");
+                    File.WriteAllText(miscPath, trimmedBatch);
+                }
+
+                continue;
+            }
+
+            // Process table-level triggers
+            var triggerTableMatch = triggerRegex.Match(trimmedBatch);
+            if (triggerTableMatch.Success)
+            {
+                var targetSchema = triggerTableMatch.Groups["targetSchema"].Success
+                    ? triggerTableMatch.Groups["targetSchema"].Value
                     : "dbo";
-                var targetTable = triggerMatch.Groups["table"].Value;
+                var targetTable = triggerTableMatch.Groups["table"].Value;
                 var key = targetSchema + "." + targetTable;
-                var extraSql = "-- Trigger: " + triggerMatch.Groups["object"].Value + Environment.NewLine +
+                var extraSql = "-- Trigger: " + triggerTableMatch.Groups["object"].Value + Environment.NewLine +
                                trimmedBatch;
 
                 if (tableFiles.ContainsKey(key))
@@ -270,22 +298,22 @@ public static class Actions
             }
 
             // For any unrecognized batch, save to a Misc folder
-            var miscFolder = Path.Combine(outputBasePath, "Misc");
-            Directory.CreateDirectory(miscFolder);
-            var miscPath = Path.Combine(miscFolder, $"Batch_{counter}.sql");
-            File.WriteAllText(miscPath, trimmedBatch);
+            var miscFolderFinal = Path.Combine(outputBasePath, "Misc");
+            Directory.CreateDirectory(miscFolderFinal);
+            var miscPathFinal = Path.Combine(miscFolderFinal, $"Batch_{counter}.sql");
+            File.WriteAllText(miscPathFinal, trimmedBatch);
         }
 
         // Write any pending extras that could not be associated with a table into Misc folder
         if (pendingExtras.Any())
         {
-            var miscFolder = Path.Combine(outputBasePath, "Misc");
-            Directory.CreateDirectory(miscFolder);
+            var miscFolderFinal = Path.Combine(outputBasePath, "Misc");
+            Directory.CreateDirectory(miscFolderFinal);
             foreach (var kvp in pendingExtras)
             {
                 var fileName = $"MissingTable_{kvp.Key.Replace('.', '_')}.sql";
-                var filePath = Path.Combine(miscFolder, fileName);
-                var content = string.Join(Environment.NewLine + Environment.NewLine, kvp.Value);
+                var filePath = Path.Combine(miscFolderFinal, fileName);
+                var content = string.Join(Environment.NewLine + "GO" + Environment.NewLine, kvp.Value);
                 File.WriteAllText(filePath, content);
             }
         }
@@ -320,13 +348,21 @@ public static class Actions
 
         // (\r?\n)* matches zero or more newlines
         const string canStartWithGoRegx = @"^(GO(\r?\n)+)?";
-        const string removeCommentsRegx = @$"^({canStartWithGoRegx}\/\*([\s\S]*?)\*\/(\r?\n)*)"; // remove comments and empty lines
-        const string removeSetRegx = @$"^({canStartWithGoRegx}SET([\s\S]*?);(\r?\n)*)"; // remove SET*; statements and empty lines
+        const string
+            removeCommentsRegx =
+                @$"^({canStartWithGoRegx}\/\*([\s\S]*?)\*\/(\r?\n)*)"; // remove comments and empty lines
+        const string
+            removeSetRegx =
+                @$"^({canStartWithGoRegx}SET([\s\S]*?);(\r?\n)*)"; // remove SET*; statements and empty lines
         const string removeGoCmdVarRegx = @"^(GO(\r?\n)+(\:.*(\r?\n)+)+(\r?\n)*)"; // remove :cmd variables
-        const string removeCmdCheckRegex = @"^(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
-        const string removeUseOrPrintRegx = @"^(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
+        const string
+            removeCmdCheckRegex =
+                @"^(:setvar\s+__IsSqlCmdEnabled([\s\S]*?)GO([\s\S]*?)END(\r?\n)*)"; // remove cmd check statements
+        const string
+            removeUseOrPrintRegx = @"^(GO(\r?\n)+(USE|PRINT)(.*?);(\r?\n)*)"; // remove USE and PRINT statements
 
-        var regex = $"{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}";
+        var regex =
+            $"{removeCommentsRegx}|{removeSetRegx}|{removeGoCmdVarRegx}|{removeCmdCheckRegex}|{removeUseOrPrintRegx}";
 
         var cleanedScript = Regex.Replace(
             script.DatabaseScript,
