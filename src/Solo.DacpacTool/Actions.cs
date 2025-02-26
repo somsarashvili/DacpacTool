@@ -89,13 +89,16 @@ public static class Actions
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         var functionRegex = new Regex(@"CREATE\s+FUNCTION\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // Regex for sequences
+        var sequenceRegex = new Regex(@"CREATE\s+SEQUENCE\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
+            RegexOptions.IgnoreCase | RegexOptions.Multiline);
         // Trigger regex for table-level triggers (exclude database triggers)
         var triggerRegex = new Regex(
             @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?\s+ON\s+(?!DATABASE)(?:\[?(?<targetSchema>[^\]\.]+)\]?\.?)?\[?(?<table>[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         // Regex for database-level triggers (ON DATABASE)
         var dbTriggerRegex = new Regex(
-            @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?\s+ON\s+DATABASE",
+            @"CREATE\s+TRIGGER\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)?\]?\s+ON\s+DATABASE",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         // Index regex extracts target table from "ON" clause
         var indexRegex = new Regex(
@@ -193,12 +196,28 @@ public static class Actions
                 continue;
             }
 
+            // Process CREATE SEQUENCE
+            var sequenceMatch = sequenceRegex.Match(trimmedBatch);
+            if (sequenceMatch.Success)
+            {
+                var schema = sequenceMatch.Groups["schema"].Success ? sequenceMatch.Groups["schema"].Value : "dbo";
+                var sequenceName = sequenceMatch.Groups["object"].Value;
+                var schemaFolder = Path.Combine(outputBasePath, schema);
+                Directory.CreateDirectory(schemaFolder);
+                var sequenceFolder = Path.Combine(schemaFolder, "Sequences");
+                Directory.CreateDirectory(sequenceFolder);
+                var filePath = Path.Combine(sequenceFolder, sequenceName + ".sql");
+                File.WriteAllText(filePath, trimmedBatch);
+                continue;
+            }
+
             // Process database-level triggers (ON DATABASE)
             if (trimmedBatch.IndexOf("ON DATABASE", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 var dbTriggerMatch = dbTriggerRegex.Match(trimmedBatch);
                 if (dbTriggerMatch.Success)
                 {
+                    // Use the "schema" group as trigger name for database triggers
                     var triggerName = dbTriggerMatch.Groups["schema"].Value;
                     var dbTriggersFolder = Path.Combine(outputBasePath, "Database Triggers");
                     Directory.CreateDirectory(dbTriggersFolder);
