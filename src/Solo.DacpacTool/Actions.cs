@@ -38,7 +38,7 @@ public static class Actions
 
         if (sqlprojFiles.Length == 0)
         {
-            throw new Exception("No .csproj files found in the specified directory.");
+            throw new Exception($"No .csproj files found in the {sqlprojDir} directory.");
         }
 
         if (sqlprojFiles.Length > 1)
