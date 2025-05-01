@@ -76,7 +76,7 @@ public static class Actions
     {
         var allSql = File.ReadAllText($"{outputDirectory}/model.sql");
 
-        var batches = allSql.Split("GO")
+        var batches = allSql.Split("GO\n")
             .Where(b => !string.IsNullOrWhiteSpace(b))
             .ToList();
 
