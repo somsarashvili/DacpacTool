@@ -49,4 +49,8 @@ switch (job)
         break;
 }
 
-Directory.Delete(Jobs.TempPath, true);
+var delete = Environment.GetEnvironmentVariable("DELETE_TEMP_FILES");
+if (delete is null or "true" or "1")
+    Directory.Delete(Jobs.TempPath, true);
+else
+    Console.WriteLine($"Temp files not deleted. Set DELETE_TEMP_FILES=true to delete them.");
