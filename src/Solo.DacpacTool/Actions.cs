@@ -81,7 +81,7 @@ public static class Actions
             .ToList();
 
         // Regex definitions for different objects
-        var tableRegex = new Regex(@"CREATE\s+TABLE\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
+        var tableRegex = new Regex(@"CREATE\s+TABLE\s+(?:\[?(?<schema>[^\]\.#]+)\]?\.?)?\[?(?<object>(?!#)[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
         var procRegex = new Regex(@"CREATE\s+PROCEDURE\s+(?:\[?(?<schema>[^\]\.]+)\]?\.?)?\[?(?<object>[^\]\s]+)\]?",
             RegexOptions.IgnoreCase | RegexOptions.Multiline);
